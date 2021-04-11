@@ -1,0 +1,5 @@
+digraph "com.vinewood:RGBN:jar:1.0" { 
+	"com.vinewood:RGBN:jar:1.0" -> "junit:junit:jar:4.11:test" ; 
+	"com.vinewood:RGBN:jar:1.0" -> "com.alibaba:fastjson:jar:1.2.9:compile" ; 
+	"junit:junit:jar:4.11:test" -> "org.hamcrest:hamcrest-core:jar:1.3:test" ; 
+ } 

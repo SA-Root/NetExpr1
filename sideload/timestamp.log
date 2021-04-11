@@ -1,0 +1,22 @@
+format:
+[<operation>]<content>
+
+
+
+
+
+e.g.
+
+[INFO]Send file 'xxx.exe' to 127.0.0.1:8800,size=10965 Bytes
+[SEND]1,pdu_to_send=1,status=New,ackedNo=1
+[RECEIVE]2,pdu_exp=1,pdu_recv=1,status=OK
+[ERROR]PDU 126 lost, go back to 125
+
+......
+
+
+[INFO]File 'xxx.exe' successfully sent to 127.0.0.1:8800
+[INFO]Total PDU count:125
+[INFO]Total timeout:12
+[INFO]Total retransmission:5
+[INFO]Time lapsed:00:12:45
