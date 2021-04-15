@@ -1,3 +1,5 @@
+package com.vinewood.utils;
+
 public class CrcUtil {
 
     /**
