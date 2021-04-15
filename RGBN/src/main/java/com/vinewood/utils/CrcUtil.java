@@ -1,7 +1,7 @@
 package com.vinewood.utils;
 
 import java.util.*;
-public class CrcUtil {
+public class CrcUtil implements iCRC16 {
 
     /**
      * 为Byte数组最后添加两位CRC校验

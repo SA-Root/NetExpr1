@@ -2,8 +2,9 @@ package com.vinewood;
 
 import java.util.Arrays;
 import com.vinewood.utils.RGBN_Utils;
-import com.vinewood.utils.VW_CRC16;
+import com.vinewood.utils.iCRC16;
 import com.vinewood.utils.ChecksumMismatchException;
+import com.vinewood.utils.CrcUtil;
 
 /**
  * @author Guo Shuaizhe
@@ -25,8 +26,9 @@ public class PDUFrame {
      * @return 0:normal
      */
     public static byte[] SerializeFrame(byte ft, short sn, short an, byte[] dat) {
-        byte[] buffer = new byte[9 + dat.length * 2];
+        byte[] buffer = new byte[9 + dat.length];
         int pos = 0;
+        pos = RGBN_Utils.ToByteArray((short) buffer.length, buffer, pos);// length
         buffer[pos++] = ft;// FrameType
         pos = RGBN_Utils.ToByteArray(sn, buffer, pos);// SeqNo
         pos = RGBN_Utils.ToByteArray(an, buffer, pos);// AckNo
@@ -34,7 +36,10 @@ public class PDUFrame {
         for (byte b : dat) {
             buffer[pos++] = b;
         }
-        pos = RGBN_Utils.ToByteArray((short) VW_CRC16.CRC16CCITT(dat), buffer, pos);// Checksum
+        iCRC16 crc = new CrcUtil();// Checksum
+        byte[] crc16 = crc.GetCRC16(dat);
+        buffer[pos++] = crc16[0];
+        buffer[pos++] = crc16[1];
         byte[] ret = Arrays.copyOfRange(buffer, 0, pos);
         return ret;
     }
@@ -49,6 +54,9 @@ public class PDUFrame {
     public static PDUFrame DeserializeFrame(byte[] stream) throws ChecksumMismatchException {
         PDUFrame ret = new PDUFrame();
         int pos = 0;
+        // pkg length
+        int length = RGBN_Utils.ShortFromByteArray(stream, pos);
+        pos += 2;
         // FrameType
         ret.FrameType = stream[pos++];
         // SeqNo
@@ -58,13 +66,17 @@ public class PDUFrame {
         ret.AckNo = RGBN_Utils.ShortFromByteArray(stream, pos);
         pos += 2;
         // Data
-        int dataEnd = stream.length - 2;
+        int dataEnd = length - 2;
         ret.Data = Arrays.copyOfRange(stream, pos, dataEnd);
+        pos = dataEnd;
         // Checksum
-        short ck = (short) VW_CRC16.CRC16CCITT(ret.Data);
-        short crc = RGBN_Utils.ShortFromByteArray(stream, pos);
+        iCRC16 crc = new CrcUtil();
+        // calc from data
+        short ck = RGBN_Utils.ShortFromByteArray(crc.GetCRC16(ret.Data), 0);
+        // original
+        short crc16 = RGBN_Utils.ShortFromByteArray(stream, pos);
         pos += 2;
-        if (ck != crc) {
+        if (ck != crc16) {
             throw new ChecksumMismatchException();
         }
         return ret;
