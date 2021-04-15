@@ -1,5 +1,6 @@
 package com.vinewood.utils;
 
+import java.util.*;
 public class CrcUtil {
 
     /**
@@ -19,16 +20,8 @@ public class CrcUtil {
     }
 
     /**
-     * CRC-16/CCITT-FALSE x16+x12+x5+1 算法
-     * 计算CRC16CCITT
-     * info
-     * Name:CRC-16/CCITT-FAI
-     * Width:16
-     * Poly:0x1021
-     * Init:0xFFFF
-     * RefIn:False
-     * RefOut:False
-     * XorOut:0x0000
+     * CRC-16/CCITT-FALSE x16+x12+x5+1 算法 计算CRC16CCITT info Name:CRC-16/CCITT-FAI
+     * Width:16 Poly:0x1021 Init:0xFFFF RefIn:False RefOut:False XorOut:0x0000
      *
      * @param bytes
      * @return
@@ -47,7 +40,7 @@ public class CrcUtil {
             }
         }
         crc &= 0xffff;
-        //输出String字样的16进制
+        // 输出String字样的16进制
         String strCrc = Integer.toHexString(crc).toUpperCase();
         System.out.println(strCrc);
         return crc;
@@ -70,7 +63,7 @@ public class CrcUtil {
 
         // 取出CRC校验位，进行计算
         int i = srcByte.length;
-        byte[] b = { srcByte[i - 2] ,srcByte[i - 1] };
+        byte[] b = { srcByte[i - 2], srcByte[i - 1] };
 
         // 比较
         return bytes[0] == b[0] && bytes[1] == b[1];
@@ -78,7 +71,8 @@ public class CrcUtil {
 
     /**
      * 对buf中offset以前crcLen长度的字节作crc校验，返回校验结果
-     * @param  buf
+     * 
+     * @param buf
      * @param crcLen
      */
     private static int calcCRC(byte[] buf, int offset, int crcLen) {
