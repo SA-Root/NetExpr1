@@ -10,11 +10,12 @@ import com.vinewood.utils.CrcUtil;
  * @author Guo Shuaizhe
  */
 public class PDUFrame {
-    public byte FrameType;
-    public short SeqNo;
-    public short AckNo;
-    public byte[] Data;
-    public short Checksum;
+    //frame length 2 bytes
+    public byte FrameType;//1 byte
+    public short SeqNo;//2 bytes
+    public short AckNo;//2 bytes
+    public byte[] Data;//DataSize bytes
+    public short Checksum;//2 bytes
 
     /**
      * Serialize a PDU frame. Automatically calculates checksum.

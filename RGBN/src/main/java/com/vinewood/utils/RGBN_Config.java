@@ -6,19 +6,19 @@ public class RGBN_Config {
     @JSONField(name = "UDPPort")
     public int UDPPort;
     @JSONField(name = "DataSize")
-    public int DataSize;
+    public short DataSize;
     @JSONField(name = "ErrorRate")
-    public int ErrorRate;
+    public short ErrorRate;
     @JSONField(name = "LostRate")
-    public int LostRate;
+    public short LostRate;
     @JSONField(name = "SWSize")
-    public int SWSize;
+    public short SWSize;
     @JSONField(name = "InitSeqNo")
-    public int InitSeqNo;
+    public short InitSeqNo;
     @JSONField(name = "Timeout")
-    public int Timeout;
+    public short Timeout;
 
-    public RGBN_Config(int port, int datasize, int erate, int lrate, int swsize, int init, int timeout) {
+    public RGBN_Config(int port, short datasize, short erate, short lrate, short swsize, short init, short timeout) {
         UDPPort = port;
         DataSize = datasize;
         ErrorRate = erate;
@@ -40,7 +40,7 @@ public class RGBN_Config {
         return DataSize;
     }
 
-    public void setDataSize(int dataSize) {
+    public void setDataSize(short dataSize) {
         DataSize = dataSize;
     }
 
@@ -48,7 +48,7 @@ public class RGBN_Config {
         return ErrorRate;
     }
 
-    public void setErrorRate(int errorRate) {
+    public void setErrorRate(short errorRate) {
         ErrorRate = errorRate;
     }
 
@@ -56,7 +56,7 @@ public class RGBN_Config {
         return LostRate;
     }
 
-    public void setLostRate(int lostRate) {
+    public void setLostRate(short lostRate) {
         LostRate = lostRate;
     }
 
@@ -64,7 +64,7 @@ public class RGBN_Config {
         return SWSize;
     }
 
-    public void setSWSize(int sWSize) {
+    public void setSWSize(short sWSize) {
         SWSize = sWSize;
     }
 
@@ -72,7 +72,7 @@ public class RGBN_Config {
         return InitSeqNo;
     }
 
-    public void setInitSeqNo(int initSeqNo) {
+    public void setInitSeqNo(short initSeqNo) {
         InitSeqNo = initSeqNo;
     }
 
@@ -80,7 +80,7 @@ public class RGBN_Config {
         return Timeout;
     }
 
-    public void setTimeout(int timeout) {
+    public void setTimeout(short timeout) {
         Timeout = timeout;
     }
 }
