@@ -10,12 +10,12 @@ import com.vinewood.utils.CrcUtil;
  * @author Guo Shuaizhe
  */
 public class PDUFrame {
-    //frame length 2 bytes
-    public byte FrameType;//1 byte
-    public short SeqNo;//2 bytes
-    public short AckNo;//2 bytes
-    public byte[] Data;//DataSize bytes
-    public short Checksum;//2 bytes
+    // frame length 2 bytes
+    public byte FrameType;// 1 byte
+    public short SeqNo;// 2 bytes
+    public short AckNo;// 2 bytes
+    public byte[] Data;// DataSize bytes
+    public short Checksum;// 2 bytes
 
     /**
      * Serialize a PDU frame. Automatically calculates checksum.
@@ -68,8 +68,11 @@ public class PDUFrame {
         pos += 2;
         // Data
         int dataEnd = length - 2;
-        ret.Data = Arrays.copyOfRange(stream, pos, dataEnd);
-        pos = dataEnd;
+        //data > 0
+        if (pos < dataEnd) {
+            ret.Data = Arrays.copyOfRange(stream, pos, dataEnd);
+            pos = dataEnd;
+        }
         // Checksum
         iCRC16 crc = new CrcUtil();
         // calc from data

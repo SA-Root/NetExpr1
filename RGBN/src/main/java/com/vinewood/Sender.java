@@ -12,15 +12,16 @@ import com.vinewood.utils.RGBN_Config;
 public class Sender implements iUDPInstance {
     private String IPAddress;
     private String FilePath;
-    //For receiving
-    private int AckExpected;
-    //For sending
+    //For receiving data
+    private int NextToReceive;
+    //For sending data
     private int AckReceived;
     //next index of DataSegments
     private int NextToSend;
     private List<byte[]> DataSegments;
     private RGBN_Config cfg;
     private int PacketSize;
+    private DatagramSocket UDPSocket;
 
     public Sender(String ip_addr, String fpath, RGBN_Config config) {
         IPAddress = ip_addr;
@@ -30,10 +31,15 @@ public class Sender implements iUDPInstance {
         AckExpected = cfg.InitSeqNo + 1;
         NextToSend = cfg.InitSeqNo;
         PacketSize = cfg.DataSize + 9;
+        try {
+            UDPSocket = new DatagramSocket();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         ReadFile();
     }
 
-    public void ReadFile() {
+    private void ReadFile() {
         File f = new File(FilePath);
         try {
             FileInputStream fStream = new FileInputStream(f);
@@ -42,7 +48,9 @@ public class Sender implements iUDPInstance {
             int LastToSend;
             if (Data.length % cfg.DataSize == 0) {
                 LastToSend = Data.length / cfg.DataSize + cfg.InitSeqNo - 1;
-            } else {
+            }
+            //fill 0
+            else {
                 LastToSend = Data.length / cfg.DataSize + cfg.InitSeqNo;
                 Data = Arrays.copyOf(Data, (Data.length / cfg.DataSize + 1) * cfg.DataSize);
             }
@@ -59,19 +67,21 @@ public class Sender implements iUDPInstance {
         while (true) {
             break;
         }
+        UDPSocket.close();
         return true;
     }
-
+    /**
+     * entering this method means ready to send
+     */
     public void SendPacket() {
+        //lock entire method for NextToSend,AckReceived
         int offset = NextToSend - cfg.InitSeqNo;
         byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived,
                 DataSegments.get(offset));
         try {
             DatagramPacket PDUPacket = new DatagramPacket(PDU, PDU.length, InetAddress.getByName(IPAddress),
                     cfg.UDPPort);
-            DatagramSocket DSocket = new DatagramSocket();
-            DSocket.send(PDUPacket);
-            DSocket.close();
+            UDPSocket.send(PDUPacket);
         } catch (Exception e) {
             e.printStackTrace();
             return;
@@ -83,6 +93,7 @@ public class Sender implements iUDPInstance {
      * @return Data segment
      */
     public byte[] ReceivePacket() {
+        
         return null;
     }
 }
