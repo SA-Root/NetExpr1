@@ -1,12 +1,11 @@
 package com.vinewood;
 
 import java.io.*;
-import com.alibaba.fastjson.JSON;
 import com.vinewood.utils.RGBN_Config;
 import com.vinewood.utils.ChecksumMismatchException;
-
-
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+
 public class RGBN {
     private static RGBN_Config config;
 

@@ -9,26 +9,26 @@ import java.util.List;
 
 import com.vinewood.utils.RGBN_Config;
 
-public class Sender implements iUDPInstance {
+public class UDPCommInstance implements iUDPInstance {
     private String IPAddress;
     private String FilePath;
-    //For receiving data
+    // For receiving data
     private int NextToReceive;
-    //For sending data
-    private int AckReceived;
-    //next index of DataSegments
+    // For sending data
+    private Integer AckReceived;
+    // next index of DataSegments
     private int NextToSend;
     private List<byte[]> DataSegments;
     private RGBN_Config cfg;
     private int PacketSize;
     private DatagramSocket UDPSocket;
 
-    public Sender(String ip_addr, String fpath, RGBN_Config config) {
+    public UDPCommInstance(String ip_addr, String fpath, RGBN_Config config) {
         IPAddress = ip_addr;
         FilePath = fpath;
         cfg = config;
         AckReceived = cfg.InitSeqNo;
-        AckExpected = cfg.InitSeqNo + 1;
+        NextToReceive = cfg.InitSeqNo + 1;
         NextToSend = cfg.InitSeqNo;
         PacketSize = cfg.DataSize + 9;
         try {
@@ -49,7 +49,7 @@ public class Sender implements iUDPInstance {
             if (Data.length % cfg.DataSize == 0) {
                 LastToSend = Data.length / cfg.DataSize + cfg.InitSeqNo - 1;
             }
-            //fill 0
+            // fill 0
             else {
                 LastToSend = Data.length / cfg.DataSize + cfg.InitSeqNo;
                 Data = Arrays.copyOf(Data, (Data.length / cfg.DataSize + 1) * cfg.DataSize);
@@ -70,11 +70,12 @@ public class Sender implements iUDPInstance {
         UDPSocket.close();
         return true;
     }
+
     /**
      * entering this method means ready to send
      */
     public void SendPacket() {
-        //lock entire method for NextToSend,AckReceived
+        // lock entire method for NextToSend,AckReceived
         int offset = NextToSend - cfg.InitSeqNo;
         byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived,
                 DataSegments.get(offset));
@@ -88,12 +89,22 @@ public class Sender implements iUDPInstance {
         }
         ++NextToSend;
     }
+
     /**
      * 
      * @return Data segment
      */
     public byte[] ReceivePacket() {
-        
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                // synchronized(AckReceived)
+                // {
+
+                // }
+            }
+        });
+        t.start();
         return null;
     }
 }
