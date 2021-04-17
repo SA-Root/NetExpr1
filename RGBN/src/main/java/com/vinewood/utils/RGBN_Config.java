@@ -17,7 +17,9 @@ public class RGBN_Config {
     public short InitSeqNo;
     @JSONField(name = "Timeout")
     public short Timeout;
-
+    public RGBN_Config()
+    {
+    }
     public RGBN_Config(int port, short datasize, short erate, short lrate, short swsize, short init, short timeout) {
         UDPPort = port;
         DataSize = datasize;

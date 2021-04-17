@@ -5,6 +5,8 @@ import com.alibaba.fastjson.JSON;
 import com.vinewood.utils.RGBN_Config;
 import com.vinewood.utils.ChecksumMismatchException;
 
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 public class RGBN {
     private static RGBN_Config config;
 
@@ -17,8 +19,8 @@ public class RGBN {
         File cfg = new File("sideload/config.json");
         try {
             FileInputStream fStream = new FileInputStream(cfg);
-            config = JSON.parseObject(fStream, RGBN_Config.class);
-
+            ObjectMapper mapper=new ObjectMapper();
+            config = mapper.readValue(cfg, RGBN_Config.class);
             fStream.close();
         } catch (Exception e) {
             e.printStackTrace();
@@ -34,7 +36,7 @@ public class RGBN {
      * @param args file to send
      */
     public static void main(String[] args) {
-
+        LoadConfig();
         // Test
         byte[] dat = new byte[] { 1, 2, 42, 6, 119, 4, 119, 119, 5 };
         byte[] res = PDUFrame.SerializeFrame((byte) 2, (short) 3, (short) 4, dat);
