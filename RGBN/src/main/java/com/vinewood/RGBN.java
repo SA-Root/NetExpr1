@@ -36,7 +36,7 @@ public class RGBN {
      */
     public static void main(String[] args) {
         LoadConfig();
-        System.out.println("IP Address to communicate: ");
+        System.out.print("IP Address to communicate: ");
         Scanner sc = new Scanner(System.in);
         String IPAddr = sc.nextLine();
         sc.close();

@@ -118,8 +118,8 @@ public class UDPCommInstance {
         TReceive.start();
         Scanner InputScanner = new Scanner(System.in);
         while (true) {
-            System.out.println("File to send('quit' to exit): ");
-            String path = InputScanner.nextLine();
+            System.out.print("File to send('quit' to exit): ");
+            String path = InputScanner.next();
             if (path == "quit") {
                 break;
             }
