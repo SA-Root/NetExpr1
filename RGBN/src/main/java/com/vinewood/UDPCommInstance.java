@@ -33,6 +33,8 @@ public class UDPCommInstance {
     private int FileLength;
     private DatagramSocket UDPSocket;
     private Semaphore SlidingWindow;
+    private Thread TReceive;
+    private Thread TSendFile;
 
     public UDPCommInstance(RGBN_Config config) {
         cfg = config;
@@ -158,7 +160,7 @@ public class UDPCommInstance {
         System.out.print("IP Address to communicate: ");
         Scanner InputScanner = new Scanner(System.in);
         IPAddress = InputScanner.nextLine();
-        Thread TReceive = new Thread(new Runnable() {
+        TReceive = new Thread(new Runnable() {
             @Override
             public void run() {
                 ReceiveThread();
@@ -176,7 +178,7 @@ public class UDPCommInstance {
             if (FileToSend.exists()) {
                 ReadFile();
                 SlidingWindow = new Semaphore(cfg.SWSize);
-                Thread TSendFile = new Thread(new Runnable() {
+                TSendFile = new Thread(new Runnable() {
                     @Override
                     public void run() {
                         SendFileThread();
