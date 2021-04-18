@@ -4,12 +4,16 @@ import java.io.*;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.Semaphore;
 
+import javax.xml.crypto.Data;
+
 import com.vinewood.utils.RGBN_Config;
+import com.vinewood.utils.RGBN_Utils;
 
 public class UDPCommInstance {
     private String IPAddress;
@@ -23,9 +27,10 @@ public class UDPCommInstance {
     // next index of DataSegments
     private int NextToSend;
     private Object SyncNextToSend;// lock
-    private List<byte[]> DataSegments;
+    private ArrayList<byte[]> DataSegments;
     private RGBN_Config cfg;
     private int PacketSize;
+    private int FileLength;
     private DatagramSocket UDPSocket;
     private Semaphore SlidingWindow;
 
@@ -47,21 +52,28 @@ public class UDPCommInstance {
 
     private void ReadFile() {
         File f = new File(FilePath);
+        DataSegments = new ArrayList<byte[]>();
         try {
             FileInputStream fStream = new FileInputStream(f);
             byte[] Data = fStream.readAllBytes();
+            FileLength = Data.length;
             fStream.close();
             int LastToSend;
             if (Data.length % cfg.DataSize == 0) {
                 LastToSend = Data.length / cfg.DataSize + cfg.InitSeqNo - 1;
+                for (int i = 0; i <= LastToSend - cfg.InitSeqNo; ++i) {
+                    DataSegments.add(Arrays.copyOfRange(Data, i * cfg.DataSize, (i + 1) * cfg.DataSize));
+                }
             }
             // fill 0
             else {
                 LastToSend = Data.length / cfg.DataSize + cfg.InitSeqNo;
-                Data = Arrays.copyOf(Data, (Data.length / cfg.DataSize + 1) * cfg.DataSize);
-            }
-            for (int i = cfg.InitSeqNo; i <= LastToSend; ++i) {
-                DataSegments.add(Arrays.copyOfRange(Data, i * cfg.DataSize, (i + 1) * cfg.DataSize));
+                int FilledLength = (Data.length / cfg.DataSize + 1) * cfg.DataSize;
+                byte[] FilledData = new byte[FilledLength];
+                FilledData = Arrays.copyOf(Data, FilledLength);
+                for (int i = 0; i <= LastToSend - cfg.InitSeqNo; ++i) {
+                    DataSegments.add(Arrays.copyOfRange(FilledData, i * cfg.DataSize, (i + 1) * cfg.DataSize));
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -70,10 +82,21 @@ public class UDPCommInstance {
     }
 
     public void SendFileThread() {
+        byte[] StrLength = ByteBuffer.allocate(4).putInt(FileLength).array();
+        // RGBN_Utils.ToByteArray(FileLength, StrLength, 0);
+        byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived, StrLength);
+        try {
+            DatagramPacket PDUPacket = new DatagramPacket(PDU, PDU.length, InetAddress.getByName(IPAddress),
+                    cfg.UDPPort);
+            UDPSocket.send(PDUPacket);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
+        }
+        ++NextToSend;
         while (true) {
             break;
         }
-        UDPSocket.close();
     }
 
     /**
@@ -100,7 +123,31 @@ public class UDPCommInstance {
         DatagramPacket ReceivedPacket;
         while (!UDPSocket.isClosed()) {
             ReceivedPacket = new DatagramPacket(buffer, buffer.length);
+            try {
+                UDPSocket.receive(ReceivedPacket);
+                byte[] bPDU = ReceivedPacket.getData();
+                PDUFrame PDU = PDUFrame.DeserializeFrame(bPDU);
+                switch (PDU.FrameType) {
+                // data frame
+                case 0:
+                    
+                    break;
+                // ack frame
+                case 1:
 
+                    break;
+                // nak frame
+                case 2:
+                    break;
+                // header frame
+                case 3:
+                    break;
+                default:
+                    break;
+                }
+            } catch (Exception e) {
+
+            }
         }
     }
 
@@ -136,6 +183,7 @@ public class UDPCommInstance {
                     }
                 });
                 TSendFile.start();
+
             } else {
                 System.out.println("[ERROR]Invalid file path.");
             }
