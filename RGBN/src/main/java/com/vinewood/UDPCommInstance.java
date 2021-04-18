@@ -29,8 +29,7 @@ public class UDPCommInstance {
     private DatagramSocket UDPSocket;
     private Semaphore SlidingWindow;
 
-    public UDPCommInstance(String ip_addr, RGBN_Config config) {
-        IPAddress = ip_addr;
+    public UDPCommInstance(RGBN_Config config) {
         cfg = config;
         AckReceived = cfg.InitSeqNo;
         NextToReceive = cfg.InitSeqNo + 1;
@@ -109,6 +108,9 @@ public class UDPCommInstance {
      * launch method, runs on main thread
      */
     public void run() {
+        System.out.print("IP Address to communicate: ");
+        Scanner InputScanner = new Scanner(System.in);
+        IPAddress = InputScanner.nextLine();
         Thread TReceive = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -116,11 +118,10 @@ public class UDPCommInstance {
             }
         });
         TReceive.start();
-        Scanner InputScanner = new Scanner(System.in);
         while (true) {
             System.out.print("File to send('quit' to exit): ");
-            String path = InputScanner.next();
-            if (path == "quit") {
+            String path = InputScanner.nextLine();
+            if (path.equals("quit")) {
                 break;
             }
             FilePath = path;
@@ -141,5 +142,6 @@ public class UDPCommInstance {
         }
         InputScanner.close();
         UDPSocket.close();
+        System.out.println("Socket on " + IPAddress + ":" + Integer.toString(cfg.UDPPort) + " is closed.");
     }
 }

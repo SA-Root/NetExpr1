@@ -36,11 +36,7 @@ public class RGBN {
      */
     public static void main(String[] args) {
         LoadConfig();
-        System.out.print("IP Address to communicate: ");
-        Scanner sc = new Scanner(System.in);
-        String IPAddr = sc.nextLine();
-        sc.close();
-        UDPCommInstance UCI = new UDPCommInstance(IPAddr, config);
+        UDPCommInstance UCI = new UDPCommInstance(config);
         UCI.run();
     }
 }
