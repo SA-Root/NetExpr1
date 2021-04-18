@@ -75,7 +75,6 @@ public class UDPCommInstance {
             break;
         }
         UDPSocket.close();
-        return true;
     }
 
     /**
