@@ -4,7 +4,6 @@ import java.io.*;
 import java.util.Scanner;
 
 import com.vinewood.utils.RGBN_Config;
-import com.vinewood.utils.ChecksumMismatchException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class RGBN {
@@ -37,8 +36,10 @@ public class RGBN {
      */
     public static void main(String[] args) {
         LoadConfig();
+        System.out.println("IP Address to communicate: ");
         Scanner sc = new Scanner(System.in);
         String IPAddr = sc.nextLine();
+        sc.close();
         UDPCommInstance UCI = new UDPCommInstance(IPAddr, config);
         UCI.run();
     }
