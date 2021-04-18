@@ -6,26 +6,31 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
+import java.util.concurrent.Semaphore;
 
 import com.vinewood.utils.RGBN_Config;
 
-public class UDPCommInstance implements iUDPInstance {
+public class UDPCommInstance {
     private String IPAddress;
     private String FilePath;
     // For receiving data
     private int NextToReceive;
+    private Object SyncNextToReceive;// lock
     // For sending data
-    private Integer AckReceived;
+    private int AckReceived;
+    private Object SyncAckReceived;// lock
     // next index of DataSegments
     private int NextToSend;
+    private Object SyncNextToSend;// lock
     private List<byte[]> DataSegments;
     private RGBN_Config cfg;
     private int PacketSize;
     private DatagramSocket UDPSocket;
+    private Semaphore SlidingWindow;
 
-    public UDPCommInstance(String ip_addr, String fpath, RGBN_Config config) {
+    public UDPCommInstance(String ip_addr, RGBN_Config config) {
         IPAddress = ip_addr;
-        FilePath = fpath;
         cfg = config;
         AckReceived = cfg.InitSeqNo;
         NextToReceive = cfg.InitSeqNo + 1;
@@ -36,7 +41,9 @@ public class UDPCommInstance implements iUDPInstance {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        ReadFile();
+        SyncAckReceived = new Object();
+        SyncNextToReceive = new Object();
+        SyncNextToSend = new Object();
     }
 
     private void ReadFile() {
@@ -63,7 +70,7 @@ public class UDPCommInstance implements iUDPInstance {
         }
     }
 
-    public boolean SendFile() {
+    public void SendFileThread() {
         while (true) {
             break;
         }
@@ -72,7 +79,7 @@ public class UDPCommInstance implements iUDPInstance {
     }
 
     /**
-     * entering this method means ready to send
+     * entering this method means ready to send. Accesses NextToSend,AckReceived
      */
     public void SendPacket() {
         // lock entire method for NextToSend,AckReceived
@@ -90,21 +97,50 @@ public class UDPCommInstance implements iUDPInstance {
         ++NextToSend;
     }
 
+    public void ReceiveThread() {
+        byte[] buffer = new byte[4096];
+        DatagramPacket ReceivedPacket;
+        while (!UDPSocket.isClosed()) {
+            ReceivedPacket = new DatagramPacket(buffer, buffer.length);
+
+        }
+    }
+
     /**
-     * 
-     * @return Data segment
+     * launch method, runs on main thread
      */
-    public byte[] ReceivePacket() {
-        Thread t = new Thread(new Runnable() {
+    public void run() {
+        Thread TReceive = new Thread(new Runnable() {
             @Override
             public void run() {
-                // synchronized(AckReceived)
-                // {
-
-                // }
+                ReceiveThread();
             }
         });
-        t.start();
-        return null;
+        TReceive.start();
+        Scanner InputScanner = new Scanner(System.in);
+        while (true) {
+            System.out.println("File to send('quit' to exit): ");
+            String path = InputScanner.nextLine();
+            if (path == "quit") {
+                break;
+            }
+            FilePath = path;
+            File FileToSend = new File(FilePath);
+            if (FileToSend.exists()) {
+                ReadFile();
+                SlidingWindow = new Semaphore(cfg.SWSize);
+                Thread TSendFile = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        SendFileThread();
+                    }
+                });
+                TSendFile.start();
+            } else {
+                System.out.println("[ERROR]Invalid file path.");
+            }
+        }
+        InputScanner.close();
+        UDPSocket.close();
     }
 }
