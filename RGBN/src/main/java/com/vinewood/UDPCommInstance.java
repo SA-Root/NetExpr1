@@ -140,8 +140,8 @@ public class UDPCommInstance {
                 }
             } else {
                 // timeout
-                if (now.getTime() - head.SendDate.getTime() >= cfg.Timeout && head.PacketNo == AckReceived) {
-                    ResetNext(head.PacketNo);
+                if (now.getTime() - head.SendDate.getTime() >= cfg.Timeout && head.PacketNo >= AckReceived) {
+                    ResetNext(AckReceived);
                 }
             }
         }
@@ -209,17 +209,22 @@ public class UDPCommInstance {
         SendSendFileLength();
         // send real file
         while (true) {
-            try {
-                SlidingWindow.acquire();
-            } catch (Exception e) {
-                e.printStackTrace();
-                return;
+            if (NextToSend <= LastToSend) {
+                try {
+                    SlidingWindow.acquire();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return;
+                }
             }
             CheckTimeout();
             synchronized (SyncNextToSend) {
                 synchronized (SyncAckReceived) {
-                    if (NextToSend > LastToSend) {
+                    if (AckReceived > LastToSend) {
                         break;
+                    }
+                    if (NextToSend > LastToSend) {
+                        continue;
                     }
                     if (NextToSend == cfg.InitSeqNo) {
                         SendSendFileLength();
@@ -416,48 +421,77 @@ public class UDPCommInstance {
                 }
                 if (!RecvDataQueue.isEmpty()) {
                     PDUFrame head = RecvDataQueue.remove();
-                    // validate packet
-                    try {
-                        ValidatePacket(head);
-                    } catch (Exception e) {
-                        // bad frame
-                        byte[] nak = PDUFrame.SerializeFrame((byte) 2, (short) 0, (short) head.SeqNo,
-                                new byte[cfg.DataSize]);
+                    if (NextToReceive <= LastToReceive) {
+                        // validate packet
                         try {
-                            DatagramPacket DPnak = new DatagramPacket(nak, nak.length,
-                                    InetAddress.getByName(HostAddress), cfg.UDPPort);
-                            UDPSocket.send(DPnak);
-                        } catch (Exception ee) {
-                            ee.printStackTrace();
-                        }
+                            ValidatePacket(head);
+                        } catch (Exception e) {
+                            // bad frame
+                            byte[] nak = PDUFrame.SerializeFrame((byte) 2, (short) 0, (short) head.SeqNo,
+                                    new byte[cfg.DataSize]);
+                            try {
+                                DatagramPacket DPnak = new DatagramPacket(nak, nak.length,
+                                        InetAddress.getByName(HostAddress), cfg.UDPPort);
+                                UDPSocket.send(DPnak);
+                            } catch (Exception ee) {
+                                ee.printStackTrace();
+                            }
 
-                        System.out.printf("[SEND]Nak %d sent.\n", head.SeqNo);
+                            System.out.printf("[SEND]Nak %d sent.\n", head.SeqNo);
 
-                        // write log
-                        String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=DataErr\n",
-                                ++TotalReceivedDataPDUCount, NextToReceive, head.SeqNo);
-                        System.out.print(logLine);
-                        try {
-                            LogFileReceive.write(logLine.getBytes());
-                        } catch (Exception ee) {
-                            ee.printStackTrace();
+                            // write log
+                            String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=DataErr\n",
+                                    ++TotalReceivedDataPDUCount, NextToReceive, head.SeqNo);
+                            System.out.print(logLine);
+                            try {
+                                LogFileReceive.write(logLine.getBytes());
+                            } catch (Exception ee) {
+                                ee.printStackTrace();
+                            }
                         }
-                    }
-                    if (head.SeqNo == NextToReceive) {
-                        // store data
-                        int offset = NextToReceive - cfg.InitSeqNo - 1;
-                        DataReceived[offset] = head.Data;
-                        // write log
-                        String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=OK\n",
-                                ++TotalReceivedDataPDUCount, NextToReceive++, head.SeqNo);
-                        System.out.print(logLine);
-                        try {
-                            LogFileReceive.write(logLine.getBytes());
-                        } catch (Exception ee) {
-                            ee.printStackTrace();
+                        if (head.SeqNo == NextToReceive) {
+                            // store data
+                            int offset = NextToReceive - cfg.InitSeqNo - 1;
+                            DataReceived[offset] = head.Data;
+                            // write log
+                            String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=OK\n",
+                                    ++TotalReceivedDataPDUCount, NextToReceive++, head.SeqNo);
+                            System.out.print(logLine);
+                            try {
+                                LogFileReceive.write(logLine.getBytes());
+                            } catch (Exception ee) {
+                                ee.printStackTrace();
+                            }
+                            // send ack
+                            byte[] ack = PDUFrame.SerializeFrame((byte) 1, (short) 0, (short) (head.SeqNo + 1),
+                                    new byte[cfg.DataSize]);
+                            try {
+                                DatagramPacket DPack = new DatagramPacket(ack, ack.length,
+                                        InetAddress.getByName(HostAddress), cfg.UDPPort);
+                                UDPSocket.send(DPack);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+
+                            System.out.printf("[SEND]Ack %d sent.\n", head.SeqNo + 1);
+
+                            // merge and write to file
+                            if (head.SeqNo == LastToReceive) {
+                                WriteToFile();
+                            }
+                        } else {
+                            String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=NoErr\n",
+                                    ++TotalReceivedDataPDUCount, NextToReceive, head.SeqNo);
+                            System.out.print(logLine);
+                            try {
+                                LogFileReceive.write(logLine.getBytes());
+                            } catch (Exception ee) {
+                                ee.printStackTrace();
+                            }
                         }
-                        // send ack
-                        byte[] ack = PDUFrame.SerializeFrame((byte) 1, (short) 0, (short) (head.SeqNo + 1),
+                    } else {
+                        // resend last ack
+                        byte[] ack = PDUFrame.SerializeFrame((byte) 1, (short) 0, (short) LastToReceive,
                                 new byte[cfg.DataSize]);
                         try {
                             DatagramPacket DPack = new DatagramPacket(ack, ack.length,
@@ -468,20 +502,7 @@ public class UDPCommInstance {
                         }
 
                         System.out.printf("[SEND]Ack %d sent.\n", head.SeqNo + 1);
-
-                        // merge and write to file
-                        if (head.SeqNo == LastToSend) {
-                            WriteToFile();
-                        }
-                    } else {
-                        String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=NoErr\n",
-                                ++TotalReceivedDataPDUCount, NextToReceive, head.SeqNo);
-                        System.out.print(logLine);
-                        try {
-                            LogFileReceive.write(logLine.getBytes());
-                        } catch (Exception ee) {
-                            ee.printStackTrace();
-                        }
+                        
                     }
                 }
             }

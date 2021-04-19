@@ -1,9 +1,9 @@
 {
-    "DataSize": 30,
+    "DataSize": 4096,
     "ErrorRate": 10,
     "InitSeqNo": 1,
     "LostRate": 10,
-    "SWSize": 4,
-    "Timeout": 10000,
+    "SWSize": 5,
+    "Timeout": 1000,
     "UDPPort": 40461
 }
