@@ -50,7 +50,7 @@ public class PDUFrame {
      * @return Deserialized frame
      * @throws ChecksumMismatchException
      */
-    public static PDUFrame DeserializeFrame(byte[] stream) throws ChecksumMismatchException {
+    public static PDUFrame DeserializeFrame(byte[] stream){
         PDUFrame ret = new PDUFrame();
         int pos = 0;
         // pkg length
@@ -71,14 +71,8 @@ public class PDUFrame {
             ret.Data = Arrays.copyOfRange(stream, pos, dataEnd);
             pos = dataEnd;
         }
-        // calc from data
-        short ck = RGBN_Utils.ShortFromByteArray(CrcUtil.GetCRC16(ret.Data), 0);
-        // original
-        short crc16 = RGBN_Utils.ShortFromByteArray(stream, pos);
-        pos += 2;
-        if (ck != crc16) {
-            throw new ChecksumMismatchException();
-        }
+        // checksum
+        ret.Checksum = RGBN_Utils.ShortFromByteArray(stream, pos);
         return ret;
     }
 }
