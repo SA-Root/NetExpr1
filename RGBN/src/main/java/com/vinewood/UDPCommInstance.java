@@ -5,6 +5,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -53,6 +54,7 @@ public class UDPCommInstance {
     private ConcurrentLinkedQueue<PDUFrame> RecvDataQueue;
     private ConcurrentLinkedQueue<PDUFrame> RecvAckQueue;
     private LinkedList<TimeoutPack> TimeoutQueue;
+    private FileOutputStream LogFile;
 
     public UDPCommInstance(RGBN_Config config) {
         cfg = config;
@@ -62,6 +64,7 @@ public class UDPCommInstance {
         PacketSize = cfg.DataSize + 9;
         try {
             UDPSocket = new DatagramSocket();
+            System.out.printf("[INFO]UDP Port on %d opened.\n", cfg.UDPPort);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -100,12 +103,27 @@ public class UDPCommInstance {
         }
     }
 
-    private boolean isTimeout() {
-
-    }
-
     private void CheckTimeout() {
-
+        TimeoutPack head = TimeoutQueue.getFirst();
+        Date now = new Date();
+        // pkg already acked
+        if (head.PacketNo < AckReceived) {
+            TimeoutQueue.removeFirst();
+            while (!TimeoutQueue.isEmpty() && TimeoutQueue.getFirst().PacketNo < AckReceived) {
+                TimeoutQueue.removeFirst();
+            }
+        } else {
+            // timeout
+            if (now.getTime() - head.SendDate.getTime() >= cfg.Timeout && head.PacketNo == AckReceived) {
+                synchronized (SyncNextToSend) {
+                    synchronized (SyncAckReceived) {
+                        NextToSend = head.PacketNo;
+                        AckReceived = head.PacketNo;
+                    }
+                }
+                TimeoutQueue.clear();
+            }
+        }
     }
 
     private void SendFileLength() {
@@ -138,7 +156,27 @@ public class UDPCommInstance {
         RecvAckQueue = new ConcurrentLinkedQueue<PDUFrame>();
         SlidingWindow = new Semaphore(cfg.SWSize);
         TimeoutQueue = new LinkedList<TimeoutPack>();
+        // create log file
+        Date now = new Date();
+        SimpleDateFormat ft = new SimpleDateFormat("yyyy-MM-dd hh-mm-ss a");
+        File directory = new File(".");
+        try {
+            String pwd = directory.getCanonicalPath();
+            File LogF = new File(pwd + "/log/" + ft.format(now) + ".log");
+            LogF.createNewFile();
+            LogFile = new FileOutputStream(LogF);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         // send file length first
+        String logLine = String.format("[INFO]Send file '%s' to %s:%d,size=%d Bytes\n", FilePath, IPAddress,
+                cfg.UDPPort, FileLength);
+        System.out.print(logLine);
+        try {
+            LogFile.write(logLine.getBytes());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         SendFileLength();
         // send real file
         while (true) {
@@ -157,6 +195,11 @@ public class UDPCommInstance {
                     }
                 }
             }
+        }
+        try {
+            LogFile.close();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -269,6 +312,6 @@ public class UDPCommInstance {
         }
         InputScanner.close();
         UDPSocket.close();
-        System.out.println("Socket on " + IPAddress + ":" + Integer.toString(cfg.UDPPort) + " is closed.");
+        System.out.println("[INFO]UDP Port on " + Integer.toString(cfg.UDPPort) + " is closed.");
     }
 }
