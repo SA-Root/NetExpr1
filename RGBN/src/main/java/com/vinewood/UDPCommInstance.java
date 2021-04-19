@@ -40,6 +40,7 @@ public class UDPCommInstance {
     // next index of DataSegments
     private int NextToSend;
     private Object SyncNextToSend;// lock
+    private int LastToSend;
     private ArrayList<byte[]> DataSegments;
     private RGBN_Config cfg;
     private int PacketSize;
@@ -77,7 +78,6 @@ public class UDPCommInstance {
             byte[] Data = fStream.readAllBytes();
             FileLength = Data.length;
             fStream.close();
-            int LastToSend;
             if (Data.length % cfg.DataSize == 0) {
                 LastToSend = Data.length / cfg.DataSize + cfg.InitSeqNo - 1;
                 for (int i = 0; i <= LastToSend - cfg.InitSeqNo; ++i) {
@@ -100,13 +100,15 @@ public class UDPCommInstance {
         }
     }
 
-    public void SendFileThread() {
-        // initialize
-        RecvDataQueue = new ConcurrentLinkedQueue<PDUFrame>();
-        RecvAckQueue = new ConcurrentLinkedQueue<PDUFrame>();
-        SlidingWindow = new Semaphore(cfg.SWSize);
-        TimeoutQueue = new LinkedList<TimeoutPack>();
-        // send file length first
+    private boolean isTimeout() {
+
+    }
+
+    private void CheckTimeout() {
+
+    }
+
+    private void SendFileLength() {
         try {
             SlidingWindow.acquire();
         } catch (Exception e) {
@@ -114,16 +116,30 @@ public class UDPCommInstance {
             return;
         }
         byte[] StrLength = ByteBuffer.allocate(4).putInt(FileLength).array();
-        byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived, StrLength);
-        try {
-            DatagramPacket PDUPacket = new DatagramPacket(PDU, PDU.length, InetAddress.getByName(IPAddress),
-                    cfg.UDPPort);
-            UDPSocket.send(PDUPacket);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return;
+        synchronized (SyncNextToSend) {
+            synchronized (SyncAckReceived) {
+                byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived, StrLength);
+                try {
+                    DatagramPacket PDUPacket = new DatagramPacket(PDU, PDU.length, InetAddress.getByName(IPAddress),
+                            cfg.UDPPort);
+                    UDPSocket.send(PDUPacket);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return;
+                }
+                ++NextToSend;
+            }
         }
-        ++NextToSend;
+    }
+
+    public void SendFileThread() {
+        // initialize
+        RecvDataQueue = new ConcurrentLinkedQueue<PDUFrame>();
+        RecvAckQueue = new ConcurrentLinkedQueue<PDUFrame>();
+        SlidingWindow = new Semaphore(cfg.SWSize);
+        TimeoutQueue = new LinkedList<TimeoutPack>();
+        // send file length first
+        SendFileLength();
         // send real file
         while (true) {
             try {
@@ -132,8 +148,15 @@ public class UDPCommInstance {
                 e.printStackTrace();
                 return;
             }
-
-            break;
+            CheckTimeout();
+            synchronized (SyncNextToSend) {
+                synchronized (SyncAckReceived) {
+                    SendPacket();
+                    if (NextToSend > LastToSend) {
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -153,6 +176,7 @@ public class UDPCommInstance {
             e.printStackTrace();
             return;
         }
+        TimeoutQueue.add(new TimeoutPack(NextToSend, new Date()));
         ++NextToSend;
     }
 
