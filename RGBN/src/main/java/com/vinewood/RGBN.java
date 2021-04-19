@@ -1,7 +1,6 @@
 package com.vinewood;
 
 import java.io.*;
-import java.util.Scanner;
 
 import com.vinewood.utils.RGBN_Config;
 import com.fasterxml.jackson.databind.ObjectMapper;

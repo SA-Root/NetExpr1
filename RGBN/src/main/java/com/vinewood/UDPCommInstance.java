@@ -10,11 +10,10 @@ import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.Semaphore;
 
-import javax.xml.crypto.Data;
-
 import com.vinewood.utils.RGBN_Config;
-import com.vinewood.utils.RGBN_Utils;
-
+/**
+ * @author Guo Shuaizhe
+ */
 public class UDPCommInstance {
     private String IPAddress;
     private String FilePath;
@@ -85,7 +84,7 @@ public class UDPCommInstance {
 
     public void SendFileThread() {
         byte[] StrLength = ByteBuffer.allocate(4).putInt(FileLength).array();
-        // RGBN_Utils.ToByteArray(FileLength, StrLength, 0);
+        //send file length first
         byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived, StrLength);
         try {
             DatagramPacket PDUPacket = new DatagramPacket(PDU, PDU.length, InetAddress.getByName(IPAddress),
@@ -132,7 +131,7 @@ public class UDPCommInstance {
                 switch (PDU.FrameType) {
                 // data frame
                 case 0:
-                    
+
                     break;
                 // ack frame
                 case 1:
