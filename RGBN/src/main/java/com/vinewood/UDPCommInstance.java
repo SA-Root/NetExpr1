@@ -7,10 +7,24 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
+import java.util.LinkedList;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
 
 import com.vinewood.utils.RGBN_Config;
+
+class TimeoutPack {
+    int PacketNo;
+    Date SendDate;
+
+    public TimeoutPack(int pkg_no, Date sdate) {
+        PacketNo = pkg_no;
+        SendDate = sdate;
+    }
+}
+
 /**
  * @author Guo Shuaizhe
  */
@@ -33,7 +47,11 @@ public class UDPCommInstance {
     private DatagramSocket UDPSocket;
     private Semaphore SlidingWindow;
     private Thread TReceive;
-    private Thread TSendFile;
+    private Thread TReceiveData;
+    private Thread TReceiveAck;
+    private ConcurrentLinkedQueue<PDUFrame> RecvDataQueue;
+    private ConcurrentLinkedQueue<PDUFrame> RecvAckQueue;
+    private LinkedList<TimeoutPack> TimeoutQueue;
 
     public UDPCommInstance(RGBN_Config config) {
         cfg = config;
@@ -83,8 +101,19 @@ public class UDPCommInstance {
     }
 
     public void SendFileThread() {
+        // initialize
+        RecvDataQueue = new ConcurrentLinkedQueue<PDUFrame>();
+        RecvAckQueue = new ConcurrentLinkedQueue<PDUFrame>();
+        SlidingWindow = new Semaphore(cfg.SWSize);
+        TimeoutQueue = new LinkedList<TimeoutPack>();
+        // send file length first
+        try {
+            SlidingWindow.acquire();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
+        }
         byte[] StrLength = ByteBuffer.allocate(4).putInt(FileLength).array();
-        //send file length first
         byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived, StrLength);
         try {
             DatagramPacket PDUPacket = new DatagramPacket(PDU, PDU.length, InetAddress.getByName(IPAddress),
@@ -95,7 +124,15 @@ public class UDPCommInstance {
             return;
         }
         ++NextToSend;
+        // send real file
         while (true) {
+            try {
+                SlidingWindow.acquire();
+            } catch (Exception e) {
+                e.printStackTrace();
+                return;
+            }
+
             break;
         }
     }
@@ -152,6 +189,14 @@ public class UDPCommInstance {
         }
     }
 
+    private void ReceiveDataThread() {
+
+    }
+
+    private void ReceiveAckThread() {
+
+    }
+
     /**
      * launch method, runs on main thread
      */
@@ -159,6 +204,7 @@ public class UDPCommInstance {
         System.out.print("IP Address to communicate: ");
         Scanner InputScanner = new Scanner(System.in);
         IPAddress = InputScanner.nextLine();
+        // launch receive thread
         TReceive = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -166,6 +212,22 @@ public class UDPCommInstance {
             }
         });
         TReceive.start();
+        // launch receive data thread
+        TReceiveData = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                ReceiveDataThread();
+            }
+        });
+        TReceiveData.start();
+        // launch receive ack thread
+        TReceiveAck = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                ReceiveAckThread();
+            }
+        });
+        TReceiveAck.start();
         while (true) {
             System.out.print("File to send('quit' to exit): ");
             String path = InputScanner.nextLine();
@@ -176,15 +238,7 @@ public class UDPCommInstance {
             File FileToSend = new File(FilePath);
             if (FileToSend.exists()) {
                 ReadFile();
-                SlidingWindow = new Semaphore(cfg.SWSize);
-                TSendFile = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        SendFileThread();
-                    }
-                });
-                TSendFile.start();
-
+                SendFileThread();
             } else {
                 System.out.println("[ERROR]Invalid file path.");
             }
