@@ -2,7 +2,6 @@ package com.vinewood;
 
 import java.util.Arrays;
 import com.vinewood.utils.RGBN_Utils;
-import com.vinewood.utils.iCRC16;
 import com.vinewood.utils.ChecksumMismatchException;
 import com.vinewood.utils.CrcUtil;
 
@@ -37,8 +36,7 @@ public class PDUFrame {
         for (byte b : dat) {
             buffer[pos++] = b;
         }
-        iCRC16 crc = new CrcUtil();// Checksum
-        byte[] crc16 = crc.GetCRC16(dat);
+        byte[] crc16 = CrcUtil.GetCRC16(dat);
         buffer[pos++] = crc16[0];
         buffer[pos++] = crc16[1];
         byte[] ret = Arrays.copyOfRange(buffer, 0, pos);
@@ -68,15 +66,13 @@ public class PDUFrame {
         pos += 2;
         // Data
         int dataEnd = length - 2;
-        //data > 0
+        // data > 0
         if (pos < dataEnd) {
             ret.Data = Arrays.copyOfRange(stream, pos, dataEnd);
             pos = dataEnd;
         }
-        // Checksum
-        iCRC16 crc = new CrcUtil();
         // calc from data
-        short ck = RGBN_Utils.ShortFromByteArray(crc.GetCRC16(ret.Data), 0);
+        short ck = RGBN_Utils.ShortFromByteArray(CrcUtil.GetCRC16(ret.Data), 0);
         // original
         short crc16 = RGBN_Utils.ShortFromByteArray(stream, pos);
         pos += 2;

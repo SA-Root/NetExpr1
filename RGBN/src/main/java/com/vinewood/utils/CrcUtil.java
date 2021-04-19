@@ -1,7 +1,7 @@
 package com.vinewood.utils;
 
 import java.util.*;
-public class CrcUtil implements iCRC16 {
+public class CrcUtil{
 
     /**
      * 为Byte数组最后添加两位CRC校验
@@ -9,14 +9,14 @@ public class CrcUtil implements iCRC16 {
      * @param Data（验证的byte数组）
      * @return 添加了CRC CCITT验证的数组
      */
-    public static byte[] SetCRC(byte[] Data) {
+    public static byte[] GetCRC16(byte[] Data) {
         int checkCode = 0;
         checkCode = crc_16_CCITT_False(Data);
         byte[] crcByte = new byte[2];
         crcByte[0] = (byte) ((checkCode >> 8) & 0xff);
         crcByte[1] = (byte) (checkCode & 0xff);
         // 将新生成的byte数组添加到原数据结尾并返回
-        return concatAll(Data, crcByte);
+        return crcByte;
     }
 
     /**
@@ -41,8 +41,8 @@ public class CrcUtil implements iCRC16 {
         }
         crc &= 0xffff;
         // 输出String字样的16进制
-        String strCrc = Integer.toHexString(crc).toUpperCase();
-        System.out.println(strCrc);
+        //String strCrc = Integer.toHexString(crc).toUpperCase();
+        //System.out.println(strCrc);
         return crc;
     }
 
