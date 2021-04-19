@@ -8,7 +8,6 @@ import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -68,6 +67,8 @@ public class UDPCommInstance {
     private ConcurrentLinkedQueue<PDUFrame> RecvDataQueue;
     private FileOutputStream LogFileReceive;
     private int TotalReceivedDataPDUCount;
+    private String HostAddress;
+    private int LastToReceive;
     // -------------------end receive---------------------
 
     public UDPCommInstance(RGBN_Config config) {
@@ -116,6 +117,17 @@ public class UDPCommInstance {
         }
     }
 
+    private void ResetNext(int n) {
+        synchronized (SyncNextToSend) {
+            synchronized (SyncAckReceived) {
+                NextToSend = n;
+                AckReceived = n;
+            }
+        }
+        SlidingWindow.release(cfg.SWSize - SlidingWindow.availablePermits());
+        TimeoutQueue.clear();
+    }
+
     private void CheckTimeout() {
         if (!TimeoutQueue.isEmpty()) {
             TimeoutPack head = TimeoutQueue.getFirst();
@@ -129,13 +141,7 @@ public class UDPCommInstance {
             } else {
                 // timeout
                 if (now.getTime() - head.SendDate.getTime() >= cfg.Timeout && head.PacketNo == AckReceived) {
-                    synchronized (SyncNextToSend) {
-                        synchronized (SyncAckReceived) {
-                            NextToSend = head.PacketNo;
-                            AckReceived = head.PacketNo;
-                        }
-                    }
-                    TimeoutQueue.clear();
+                    ResetNext(head.PacketNo);
                 }
             }
         }
@@ -165,6 +171,7 @@ public class UDPCommInstance {
                     e.printStackTrace();
                     return;
                 }
+                TimeoutQueue.add(new TimeoutPack(NextToSend, new Date()));
                 ++NextToSend;
             }
         }
@@ -173,8 +180,6 @@ public class UDPCommInstance {
     public void SendFileThread() {
         Instant s = Instant.now();
         // initialize
-        RecvDataQueue = new ConcurrentLinkedQueue<PDUFrame>();
-        RecvAckQueue = new ConcurrentLinkedQueue<PDUFrame>();
         SlidingWindow = new Semaphore(cfg.SWSize);
         TimeoutQueue = new LinkedList<TimeoutPack>();
         TotalSentDataPDUCount = 0;
@@ -213,9 +218,13 @@ public class UDPCommInstance {
             CheckTimeout();
             synchronized (SyncNextToSend) {
                 synchronized (SyncAckReceived) {
-                    SendPacket();
                     if (NextToSend > LastToSend) {
                         break;
+                    }
+                    if (NextToSend == cfg.InitSeqNo) {
+                        SendSendFileLength();
+                    } else {
+                        SendPacket();
                     }
                 }
             }
@@ -240,28 +249,28 @@ public class UDPCommInstance {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        logLine = String.format("[INFO]Total PDU count:%d\n", TotalSentDataPDUCount);
+        logLine = String.format("[INFO]Total PDU count: %d\n", TotalSentDataPDUCount);
         System.out.print(logLine);
         try {
             LogFileSend.write(logLine.getBytes());
         } catch (Exception e) {
             e.printStackTrace();
         }
-        logLine = String.format("[INFO]Total timeout:%d\n", TotalTimeoutPDUCount);
+        logLine = String.format("[INFO]Total timeout: %d\n", TotalTimeoutPDUCount);
         System.out.print(logLine);
         try {
             LogFileSend.write(logLine.getBytes());
         } catch (Exception e) {
             e.printStackTrace();
         }
-        logLine = String.format("[INFO]Total retransmission:%d\n", TotalRetransmissionCount);
+        logLine = String.format("[INFO]Total retransmission: %d\n", TotalRetransmissionCount);
         System.out.print(logLine);
         try {
             LogFileSend.write(logLine.getBytes());
         } catch (Exception e) {
             e.printStackTrace();
         }
-        logLine = String.format("[INFO]Time elapsed:%d\n", Duration.between(s, end).getSeconds());
+        logLine = String.format("[INFO]Time elapsed: %d seconds\n", Duration.between(s, end).getSeconds());
         System.out.print(logLine);
         try {
             LogFileSend.write(logLine.getBytes());
@@ -314,8 +323,7 @@ public class UDPCommInstance {
                 byte[] bPDU = ReceivedPacket.getData();
                 PDU = PDUFrame.DeserializeFrame(bPDU);
             } catch (Exception e) {
-                e.printStackTrace();
-                continue;
+                break;
             }
             switch (PDU.FrameType) {
             // data frame
@@ -327,12 +335,17 @@ public class UDPCommInstance {
                 break;
             // ack frame
             case 1:
-                // nak frame
-            case 2:
                 RecvAckQueue.add(PDU);
                 synchronized (TReceiveAck) {
                     TReceiveAck.notify();
                 }
+                break;
+            // nak frame
+            case 2:
+
+                System.out.printf("[RECEIVE]Nak %d received.\n", PDU.AckNo);
+
+                ResetNext(PDU.AckNo);
                 break;
             // header frame
             case 3:
@@ -359,12 +372,15 @@ public class UDPCommInstance {
                 ReceiveFileLength = RGBN_Utils.IntFromByteArray(PDU.Data, 0);
                 if (ReceiveFileLength % cfg.DataSize == 0) {
                     DataReceived = new byte[ReceiveFileLength / cfg.DataSize][cfg.DataSize];
+                    LastToReceive = ReceiveFileLength / cfg.DataSize + cfg.InitSeqNo - 1;
                 } else {
                     DataReceived = new byte[ReceiveFileLength / cfg.DataSize + 1][cfg.DataSize];
+                    LastToReceive = ReceiveFileLength / cfg.DataSize + cfg.InitSeqNo;
                 }
                 // write log
-                String logLine = String.format("[INFO]Receive file from %s,port=%d,size=%d Bytes\n",
-                        ReceivedPacket.getAddress().toString(), cfg.UDPPort, ReceiveFileLength);
+                HostAddress = ReceivedPacket.getAddress().toString().substring(1);
+                String logLine = String.format("[INFO]Receive file from %s,port=%d,size=%d Bytes\n", HostAddress,
+                        cfg.UDPPort, ReceiveFileLength);
                 System.out.print(logLine);
                 try {
                     LogFileReceive.write(logLine.getBytes());
@@ -388,24 +404,151 @@ public class UDPCommInstance {
 
     private void ReceiveDataThread() {
         // close logfilereceive after receiving
-        synchronized (TReceiveData) {
-            
-            try {
-                TReceiveData.wait();
-            } catch (Exception e) {
-                e.printStackTrace();
+        while (true) {
+            synchronized (TReceiveData) {
+                try {
+                    TReceiveData.wait();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+                if (!RecvDataQueue.isEmpty()) {
+                    PDUFrame head = RecvDataQueue.remove();
+                    // validate packet
+                    try {
+                        ValidatePacket(head);
+                    } catch (Exception e) {
+                        // bad frame
+                        byte[] nak = PDUFrame.SerializeFrame((byte) 2, (short) 0, (short) head.SeqNo,
+                                new byte[cfg.DataSize]);
+                        try {
+                            DatagramPacket DPnak = new DatagramPacket(nak, nak.length,
+                                    InetAddress.getByName(HostAddress), cfg.UDPPort);
+                            UDPSocket.send(DPnak);
+                        } catch (Exception ee) {
+                            ee.printStackTrace();
+                        }
+
+                        System.out.printf("[SEND]Nak %d sent.\n", head.SeqNo);
+
+                        // write log
+                        String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=DataErr\n",
+                                ++TotalReceivedDataPDUCount, NextToReceive, head.SeqNo);
+                        System.out.print(logLine);
+                        try {
+                            LogFileReceive.write(logLine.getBytes());
+                        } catch (Exception ee) {
+                            ee.printStackTrace();
+                        }
+                    }
+                    if (head.SeqNo == NextToReceive) {
+                        // store data
+                        int offset = NextToReceive - cfg.InitSeqNo - 1;
+                        DataReceived[offset] = head.Data;
+                        // write log
+                        String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=OK\n",
+                                ++TotalReceivedDataPDUCount, NextToReceive++, head.SeqNo);
+                        System.out.print(logLine);
+                        try {
+                            LogFileReceive.write(logLine.getBytes());
+                        } catch (Exception ee) {
+                            ee.printStackTrace();
+                        }
+                        // send ack
+                        byte[] ack = PDUFrame.SerializeFrame((byte) 1, (short) 0, (short) (head.SeqNo + 1),
+                                new byte[cfg.DataSize]);
+                        try {
+                            DatagramPacket DPack = new DatagramPacket(ack, ack.length,
+                                    InetAddress.getByName(HostAddress), cfg.UDPPort);
+                            UDPSocket.send(DPack);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        System.out.printf("[SEND]Ack %d sent.\n", head.SeqNo + 1);
+
+                        // merge and write to file
+                        if (head.SeqNo == LastToSend) {
+                            WriteToFile();
+                        }
+                    } else {
+                        String logLine = String.format("[RECEIVE]%d,pdu_exp=%d,pdu_recv=%d,status=NoErr\n",
+                                ++TotalReceivedDataPDUCount, NextToReceive, head.SeqNo);
+                        System.out.print(logLine);
+                        try {
+                            LogFileReceive.write(logLine.getBytes());
+                        } catch (Exception ee) {
+                            ee.printStackTrace();
+                        }
+                    }
+                }
             }
         }
     }
 
     private void ReceiveAckThread() {
-        synchronized (TReceiveAck) {
+        while (true) {
+            synchronized (TReceiveAck) {
+                try {
+                    TReceiveAck.wait();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+                if (!RecvAckQueue.isEmpty()) {
+                    PDUFrame head = RecvAckQueue.remove();
+                    SlidingWindow.release();
+                    synchronized (SyncAckReceived) {
+                        AckReceived = head.AckNo;
+                    }
 
-            try {
-                TReceiveAck.wait();
-            } catch (Exception e) {
-                e.printStackTrace();
+                    System.out.printf("[RECEIVE]Ack %d received.\n", head.AckNo);
+
+                }
             }
+        }
+    }
+
+    private void WriteToFile() {
+        int last = LastToReceive - cfg.InitSeqNo;
+        File output = new File("receive.txt");
+        try {
+            output.createNewFile();
+            FileOutputStream os = new FileOutputStream(output);
+            for (int i = 0; i < last; ++i) {
+                os.write(DataReceived[i]);
+            }
+            if (ReceiveFileLength % cfg.DataSize == 0) {
+                os.write(DataReceived[last]);
+            } else {
+                int remain = ReceiveFileLength - ReceiveFileLength / cfg.DataSize * cfg.DataSize;
+                byte[] lastbit = Arrays.copyOfRange(DataReceived[last], 0, remain);
+                os.write(lastbit);
+            }
+            os.close();
+        } catch (Exception e) {
+            e.printStackTrace();//
+            System.out.println("[ERROR]Failed to write received file.");
+        }
+    }
+
+    private void CleanUp() {
+        UDPSocket.close();
+        synchronized (TReceive) {
+            TReceive.notify();
+            TReceive.interrupt();
+        }
+        synchronized (TReceiveData) {
+            TReceiveData.notify();
+            TReceiveData.interrupt();
+        }
+        synchronized (TReceiveAck) {
+            TReceiveAck.notify();
+            TReceiveAck.interrupt();
         }
     }
 
@@ -416,6 +559,8 @@ public class UDPCommInstance {
         System.out.print("IP Address to communicate: ");
         Scanner InputScanner = new Scanner(System.in);
         IPAddress = InputScanner.nextLine();
+        RecvDataQueue = new ConcurrentLinkedQueue<PDUFrame>();
+        RecvAckQueue = new ConcurrentLinkedQueue<PDUFrame>();
         // launch receive thread
         TReceive = new Thread(new Runnable() {
             @Override
@@ -456,7 +601,7 @@ public class UDPCommInstance {
             }
         }
         InputScanner.close();
-        UDPSocket.close();
         System.out.println("[INFO]UDP Port on " + Integer.toString(cfg.UDPPort) + " is closed.");
+        CleanUp();
     }
 }
