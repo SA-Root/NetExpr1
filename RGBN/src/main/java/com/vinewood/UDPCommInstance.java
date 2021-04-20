@@ -502,7 +502,7 @@ public class UDPCommInstance {
                         }
 
                         System.out.printf("[SEND]Ack %d sent.\n", head.SeqNo + 1);
-                        
+
                     }
                 }
             }
@@ -522,7 +522,7 @@ public class UDPCommInstance {
                 }
                 if (!RecvAckQueue.isEmpty()) {
                     PDUFrame head = RecvAckQueue.remove();
-                    SlidingWindow.release();
+                    SlidingWindow.release(head.AckNo - AckReceived);
                     synchronized (SyncAckReceived) {
                         AckReceived = head.AckNo;
                     }
