@@ -1,5 +1,5 @@
 {
-    "DataSize": 4096,
+    "DataSize": 1024,
     "ErrorRate": 10,
     "InitSeqNo": 1,
     "LostRate": 10,

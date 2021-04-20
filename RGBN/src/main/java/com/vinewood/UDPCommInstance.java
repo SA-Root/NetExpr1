@@ -14,7 +14,6 @@ import java.util.Date;
 import java.util.LinkedList;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Semaphore;
 
 import com.vinewood.utils.ChecksumMismatchException;
 import com.vinewood.utils.CrcUtil;
@@ -40,7 +39,8 @@ public class UDPCommInstance {
     private DatagramSocket UDPSocket;
     private Thread TReceive;
     // -------------------send----------------------
-    private Semaphore SlidingWindow;
+    private int SlidingWindow;
+    private Object SyncSlidingWindow;
     private String IPAddress;
     private String FilePath;
     private int AckReceived;
@@ -58,6 +58,9 @@ public class UDPCommInstance {
     private int TotalSentDataPDUCount;
     private int TotalTimeoutPDUCount;
     private int TotalRetransmissionCount;
+    private boolean isRetransmitting;
+    private int RetransLimit;
+    private Object SyncRetransLimit;
     // -------------------end send--------------------
     // ---------------------receive---------------------
     private int NextToReceive;
@@ -73,10 +76,13 @@ public class UDPCommInstance {
 
     public UDPCommInstance(RGBN_Config config) {
         cfg = config;
-        AckReceived = cfg.InitSeqNo;
-        NextToReceive = cfg.InitSeqNo;
-        NextToSend = cfg.InitSeqNo;
         PacketSize = cfg.DataSize + 9;
+
+        NextToReceive = cfg.InitSeqNo;
+
+        AckReceived = cfg.InitSeqNo;
+        NextToSend = cfg.InitSeqNo;
+
         try {
             UDPSocket = new DatagramSocket(cfg.UDPPort);
             System.out.printf("[INFO]UDP Port on %d opened.\n", cfg.UDPPort);
@@ -85,6 +91,8 @@ public class UDPCommInstance {
         }
         SyncAckReceived = new Object();
         SyncNextToSend = new Object();
+        SyncSlidingWindow = new Object();
+        SyncRetransLimit = new Object();
     }
 
     private void ReadFile() {
@@ -124,11 +132,13 @@ public class UDPCommInstance {
                 AckReceived = n;
             }
         }
-        SlidingWindow.release(cfg.SWSize - SlidingWindow.availablePermits());
+        synchronized (SyncSlidingWindow) {
+            SlidingWindow = cfg.SWSize;
+        }
         TimeoutQueue.clear();
     }
 
-    private void CheckTimeout() {
+    private boolean CheckTimeout() {
         if (!TimeoutQueue.isEmpty()) {
             TimeoutPack head = TimeoutQueue.getFirst();
             Date now = new Date();
@@ -141,15 +151,25 @@ public class UDPCommInstance {
             } else {
                 // timeout
                 if (now.getTime() - head.SendDate.getTime() >= cfg.Timeout && head.PacketNo >= AckReceived) {
+                    ++TotalTimeoutPDUCount;
                     ResetNext(AckReceived);
+                    synchronized (SyncRetransLimit) {
+                        RetransLimit = NextToSend - 1;
+                        isRetransmitting = true;
+                    }
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     private void SendSendFileLength() {
         try {
-            SlidingWindow.acquire();
+            synchronized (SyncSlidingWindow) {
+                if (SlidingWindow > 0)
+                    --SlidingWindow;
+            }
         } catch (Exception e) {
             e.printStackTrace();
             return;
@@ -180,11 +200,14 @@ public class UDPCommInstance {
     public void SendFileThread() {
         Instant s = Instant.now();
         // initialize
-        SlidingWindow = new Semaphore(cfg.SWSize);
+        SlidingWindow = cfg.SWSize;
         TimeoutQueue = new LinkedList<TimeoutPack>();
         TotalSentDataPDUCount = 0;
         TotalTimeoutPDUCount = 0;
         TotalRetransmissionCount = 0;
+        AckReceived = cfg.InitSeqNo;
+        NextToSend = cfg.InitSeqNo;
+        isRetransmitting = false;
         // create log file
         Date now = new Date();
         SimpleDateFormat ft = new SimpleDateFormat("yyyy-MM-dd hh-mm-ss a");
@@ -210,14 +233,24 @@ public class UDPCommInstance {
         // send real file
         while (true) {
             if (NextToSend <= LastToSend) {
-                try {
-                    SlidingWindow.acquire();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    return;
+                synchronized (SyncSlidingWindow) {
+                    if (SlidingWindow > 0) {
+                        --SlidingWindow;
+                        CheckTimeout();
+                    } else {
+                        if (!CheckTimeout()) {
+                            try {
+                                Thread.sleep(100);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            continue;
+                        }
+                    }
                 }
+            } else {
+                CheckTimeout();
             }
-            CheckTimeout();
             synchronized (SyncNextToSend) {
                 synchronized (SyncAckReceived) {
                     if (AckReceived > LastToSend) {
@@ -232,6 +265,11 @@ public class UDPCommInstance {
                         SendPacket();
                     }
                 }
+            }
+            try {
+                Thread.sleep(100);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
         Instant end = Instant.now();
@@ -289,7 +327,7 @@ public class UDPCommInstance {
      */
     public void SendPacket() {
         // lock entire method for NextToSend,AckReceived
-        int offset = NextToSend - cfg.InitSeqNo;
+        int offset = NextToSend - cfg.InitSeqNo - 1;
         byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived,
                 DataSegments.get(offset));
         try {
@@ -297,8 +335,20 @@ public class UDPCommInstance {
                     cfg.UDPPort);
             UDPSocket.send(PDUPacket);
             // write log
-            String logLine = String.format("[SEND]%d,pdu_to_send=%d,status=New,ackedNo=%d\n", ++TotalSentDataPDUCount,
-                    NextToSend, AckReceived);
+            String logLine = null;
+            synchronized (SyncRetransLimit) {
+                if (isRetransmitting) {
+                    logLine = String.format("[SEND]%d,pdu_to_send=%d,status=Retransmit,ackedNo=%d\n",
+                            ++TotalSentDataPDUCount, NextToSend, AckReceived);
+                    ++TotalRetransmissionCount;
+                    if (NextToSend == RetransLimit) {
+                        isRetransmitting = false;
+                    }
+                } else {
+                    logLine = String.format("[SEND]%d,pdu_to_send=%d,status=New,ackedNo=%d\n", ++TotalSentDataPDUCount,
+                            NextToSend, AckReceived);
+                }
+            }
             System.out.print(logLine);
             LogFileSend.write(logLine.getBytes());
         } catch (Exception e) {
@@ -354,6 +404,7 @@ public class UDPCommInstance {
                 break;
             // header frame
             case 3:
+                NextToReceive = cfg.InitSeqNo;
                 // create log file
                 Date now = new Date();
                 SimpleDateFormat ft = new SimpleDateFormat("yyyy-MM-dd hh-mm-ss a");
@@ -522,9 +573,12 @@ public class UDPCommInstance {
                 }
                 if (!RecvAckQueue.isEmpty()) {
                     PDUFrame head = RecvAckQueue.remove();
-                    SlidingWindow.release(head.AckNo - AckReceived);
+                    SlidingWindow += head.AckNo - AckReceived;
                     synchronized (SyncAckReceived) {
                         AckReceived = head.AckNo;
+                    }
+                    synchronized (SyncRetransLimit) {
+                        isRetransmitting = false;
                     }
 
                     System.out.printf("[RECEIVE]Ack %d received.\n", head.AckNo);
