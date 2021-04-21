@@ -14,8 +14,9 @@ public class RGBN {
      * @return 0: normal, 1: error
      */
     private static int LoadConfig() {
-        File cfg = new File("sideload/config.json");
+        File cur = new File(".");
         try {
+            File cfg = new File(cur.getCanonicalPath() + "/sideload/config.json");
             FileInputStream fStream = new FileInputStream(cfg);
             ObjectMapper mapper = new ObjectMapper();
             config = mapper.readValue(cfg, RGBN_Config.class);
