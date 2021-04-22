@@ -335,15 +335,22 @@ public class UDPCommInstance {
     public void SendPacket() {
         // lock entire method for NextToSend,AckReceived
         int offset = NextToSend - cfg.InitSeqNo - 1;
-
+        RGBN_Utils.PDUErrorLoss SendType = RGBN_Utils.ErrorLossGenerator(cfg.ErrorRate, cfg.LostRate);
         byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived,
                 DataSegments.get(offset));
-        //
+        if (SendType == RGBN_Utils.PDUErrorLoss.ERROR) {
+            PDU[15] = '$';
+            PDU[20] = '#';
+            PDU[25] = '@';
+        }
+
         try {
             DatagramPacket PDUPacket = new DatagramPacket(PDU, PDU.length, InetAddress.getByName(IPAddress),
                     cfg.UDPPort);
             //
-            UDPSocket.send(PDUPacket);
+            if (SendType == RGBN_Utils.PDUErrorLoss.NORMAL) {
+                UDPSocket.send(PDUPacket);
+            }
             // write log
             String logLine = null;
             synchronized (SyncRetransLimit) {
@@ -442,7 +449,7 @@ public class UDPCommInstance {
                 ReceiveFileLength = RGBN_Utils.IntFromByteArray(PDU.Data, 0);
 
                 ReceiveFileName = new String(PDU.Data);
-                ReceiveFileName = ReceiveFileName.substring(4, ReceiveFileName.indexOf(0,5));
+                ReceiveFileName = ReceiveFileName.substring(4, ReceiveFileName.indexOf(0, 5));
 
                 if (ReceiveFileLength % cfg.DataSize == 0) {
                     DataReceived = new byte[ReceiveFileLength / cfg.DataSize][cfg.DataSize];
