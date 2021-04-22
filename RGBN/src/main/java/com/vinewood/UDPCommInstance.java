@@ -401,16 +401,16 @@ public class UDPCommInstance {
             // data frame
             case 0:
                 RecvDataQueue.add(PDU);
-                synchronized (TReceiveData) {
-                    TReceiveData.notify();
-                }
+                // synchronized (TReceiveData) {
+                //     TReceiveData.notify();
+                // }
                 break;
             // ack frame
             case 1:
                 RecvAckQueue.add(PDU);
-                synchronized (TReceiveAck) {
-                    TReceiveAck.notify();
-                }
+                // synchronized (TReceiveAck) {
+                //     TReceiveAck.notify();
+                // }
                 break;
             // nak frame
             case 2:
@@ -486,12 +486,12 @@ public class UDPCommInstance {
     private void ReceiveDataThread() {
         // close logfilereceive after receiving
         while (true) {
-            synchronized (TReceiveData) {
-                try {
-                    TReceiveData.wait();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            //synchronized (TReceiveData) {
+                // try {
+                //     TReceiveData.wait();
+                // } catch (Exception e) {
+                //     e.printStackTrace();
+                // }
                 if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
@@ -581,18 +581,26 @@ public class UDPCommInstance {
 
                     }
                 }
-            }
+                else{
+                    try {
+                        Thread.sleep(100);
+                    } catch (Exception e) {
+                        
+                    }
+                    
+                }
+            //}
         }
     }
 
     private void ReceiveAckThread() {
         while (true) {
-            synchronized (TReceiveAck) {
-                try {
-                    TReceiveAck.wait();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            //synchronized (TReceiveAck) {
+                // try {
+                //     TReceiveAck.wait();
+                // } catch (Exception e) {
+                //     e.printStackTrace();
+                // }
                 if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
@@ -609,7 +617,14 @@ public class UDPCommInstance {
                     System.out.printf("[RECEIVE]Ack %d received.\n", head.AckNo);
 
                 }
-            }
+                else{
+                    try {
+                        Thread.sleep(100);
+                    } catch (Exception e) {
+                        
+                    }
+                }
+            //}
         }
     }
 
@@ -638,18 +653,21 @@ public class UDPCommInstance {
 
     private void CleanUp() {
         UDPSocket.close();
-        synchronized (TReceive) {
-            TReceive.notify();
-            TReceive.interrupt();
-        }
-        synchronized (TReceiveData) {
-            TReceiveData.notify();
-            TReceiveData.interrupt();
-        }
-        synchronized (TReceiveAck) {
-            TReceiveAck.notify();
-            TReceiveAck.interrupt();
-        }
+        TReceive.interrupt();
+        TReceiveData.interrupt();
+        TReceiveAck.interrupt();
+        // synchronized (TReceive) {
+        //     //TReceive.notify();
+        //     TReceive.interrupt();
+        // }
+        // synchronized (TReceiveData) {
+        //     //TReceiveData.notify();
+        //     TReceiveData.interrupt();
+        // }
+        // synchronized (TReceiveAck) {
+        //     //TReceiveAck.notify();
+        //     TReceiveAck.interrupt();
+        // }
     }
 
     /**
