@@ -40,6 +40,7 @@ public class UDPCommInstance {
     private Thread TReceive;
     // -------------------send----------------------
     private int SlidingWindow;
+    private String SendFileName;
     private Object SyncSlidingWindow;
     private String IPAddress;
     private String FilePath;
@@ -63,6 +64,7 @@ public class UDPCommInstance {
     private Object SyncRetransLimit;
     // -------------------end send--------------------
     // ---------------------receive---------------------
+    private String ReceiveFileName;
     private int NextToReceive;
     private byte[][] DataReceived;
     private int ReceiveFileLength;
@@ -175,6 +177,7 @@ public class UDPCommInstance {
             return;
         }
         byte[] StrLength = ByteBuffer.allocate(cfg.DataSize).putInt(SendFileLength).array();
+        System.arraycopy(SendFileName.getBytes(), 0, StrLength, 4, SendFileName.length());
         synchronized (SyncNextToSend) {
             synchronized (SyncAckReceived) {
                 byte[] PDU = PDUFrame.SerializeFrame((byte) 3, (short) NextToSend, (short) AckReceived, StrLength);
@@ -214,6 +217,10 @@ public class UDPCommInstance {
         File directory = new File(".");
         try {
             String pwd = directory.getCanonicalPath();
+            File logPath = new File(pwd + "/log");
+            if (!logPath.exists()) {
+                logPath.mkdir();
+            }
             File LogF = new File(pwd + "/log/" + ft.format(now) + " Send.log");
             LogF.createNewFile();
             LogFileSend = new FileOutputStream(LogF);
@@ -328,11 +335,14 @@ public class UDPCommInstance {
     public void SendPacket() {
         // lock entire method for NextToSend,AckReceived
         int offset = NextToSend - cfg.InitSeqNo - 1;
+
         byte[] PDU = PDUFrame.SerializeFrame((byte) 0, (short) NextToSend, (short) AckReceived,
                 DataSegments.get(offset));
+        //
         try {
             DatagramPacket PDUPacket = new DatagramPacket(PDU, PDU.length, InetAddress.getByName(IPAddress),
                     cfg.UDPPort);
+            //
             UDPSocket.send(PDUPacket);
             // write log
             String logLine = null;
@@ -411,6 +421,10 @@ public class UDPCommInstance {
                 File directory = new File(".");
                 try {
                     String pwd = directory.getCanonicalPath();
+                    File logPath = new File(pwd + "/log");
+                    if (!logPath.exists()) {
+                        logPath.mkdir();
+                    }
                     File LogF = new File(pwd + "/log/" + ft.format(now) + " Receive.log");
                     LogF.createNewFile();
                     LogFileReceive = new FileOutputStream(LogF);
@@ -426,6 +440,10 @@ public class UDPCommInstance {
                 }
                 // analyze
                 ReceiveFileLength = RGBN_Utils.IntFromByteArray(PDU.Data, 0);
+
+                ReceiveFileName = new String(PDU.Data);
+                ReceiveFileName = ReceiveFileName.substring(4, ReceiveFileName.indexOf(0,5));
+
                 if (ReceiveFileLength % cfg.DataSize == 0) {
                     DataReceived = new byte[ReceiveFileLength / cfg.DataSize][cfg.DataSize];
                     LastToReceive = ReceiveFileLength / cfg.DataSize + cfg.InitSeqNo - 1;
@@ -590,7 +608,7 @@ public class UDPCommInstance {
 
     private void WriteToFile() {
         int last = LastToReceive - cfg.InitSeqNo;
-        File output = new File("receive.txt");
+        File output = new File(ReceiveFileName);
         try {
             output.createNewFile();
             FileOutputStream os = new FileOutputStream(output);
@@ -669,6 +687,7 @@ public class UDPCommInstance {
             FilePath = path;
             File FileToSend = new File(FilePath);
             if (FileToSend.exists()) {
+                SendFileName = FileToSend.getName();
                 ReadFile();
                 SendFileThread();
             } else {

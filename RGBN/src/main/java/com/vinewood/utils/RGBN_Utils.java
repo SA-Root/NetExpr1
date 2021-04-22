@@ -37,7 +37,7 @@ public class RGBN_Utils {
         return ((stream[offset] & 0xFF) << 24 | (stream[offset + 1] & 0xFF) << 16 | (stream[offset + 2] & 0xFF) << 8
                 | (stream[offset + 3] & 0xFF));
     }
-
+    
     /**
      * Generate random loss & error PDU
      * 
