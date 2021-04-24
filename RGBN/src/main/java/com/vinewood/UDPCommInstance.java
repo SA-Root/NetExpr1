@@ -583,7 +583,7 @@ public class UDPCommInstance {
                 }
                 else{
                     try {
-                        Thread.sleep(100);
+                        TReceiveData.wait(100);
                     } catch (Exception e) {
                         
                     }
@@ -619,7 +619,7 @@ public class UDPCommInstance {
                 }
                 else{
                     try {
-                        Thread.sleep(100);
+                        TReceiveAck.wait(100);
                     } catch (Exception e) {
                         
                     }
@@ -653,8 +653,11 @@ public class UDPCommInstance {
 
     private void CleanUp() {
         UDPSocket.close();
+        //TReceive.notify();
         TReceive.interrupt();
+        //TReceiveData.notify();
         TReceiveData.interrupt();
+        //TReceiveAck.notify();
         TReceiveAck.interrupt();
         // synchronized (TReceive) {
         //     //TReceive.notify();
